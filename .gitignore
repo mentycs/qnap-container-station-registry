@@ -1,0 +1,17 @@
+# Registry data
+registry-data/
+
+# Secrets
+registry-secret.txt
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

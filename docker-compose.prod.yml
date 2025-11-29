@@ -1,0 +1,40 @@
+# Docker Registry v3 - Configurazione Produzione con Redis per QNAP
+# Uso: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  registry:
+    image: registry:3
+    container_name: registry
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - OTEL_TRACES_EXPORTER=none
+      - REGISTRY_HTTP_ADDR=0.0.0.0:5000
+      - REGISTRY_HTTP_SECRET=${REGISTRY_SECRET:-changeme}
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
+      - REGISTRY_STORAGE_CACHE_BLOBDESCRIPTOR=redis
+      - REGISTRY_REDIS_ADDR=redis:6379
+    volumes:
+      - ./registry-data:/var/lib/registry
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:alpine
+    container_name: registry-redis
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
