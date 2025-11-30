@@ -1,31 +1,33 @@
-# Installazione Docker Registry v3 su QNAP Container Station
+# Docker Registry v3 Installation on QNAP Container Station
 
-**Versione:** 1.2  
-**Data:** 29 Novembre 2025  
-**Container Station:** 3.1.1.1451+  
+**Languages:** [English](README.md) | [Italiano](README.it.md)
+
+**Version:** 1.2
+**Date:** November 29, 2025
+**Container Station:** 3.1.1.1451+
 **Registry:** 3.0.0
 
 ---
 
-## Panoramica
+## Overview
 
-Questa guida descrive come installare e configurare un Docker Registry privato su QNAP NAS utilizzando Container Station. La procedura utilizza la CLI Docker per garantire un corretto port mapping, aggirando le limitazioni note dell'interfaccia grafica di Container Station.
-
----
-
-## Prerequisiti
-
-- QNAP NAS con Container Station 3.x installato
-- Accesso SSH al NAS abilitato
-- Client SSH (Terminal su macOS/Linux, PuTTY su Windows)
+This guide describes how to install and configure a private Docker Registry on QNAP NAS using Container Station. The procedure uses the Docker CLI to ensure correct port mapping, bypassing the known limitations of the Container Station graphical interface.
 
 ---
 
-## Architettura Storage del Registry
+## Prerequisites
 
-### Struttura Directory
+- QNAP NAS with Container Station 3.x installed
+- SSH access to the NAS enabled
+- SSH client (Terminal on macOS/Linux, PuTTY on Windows)
 
-Il registry organizza i dati in modo content-addressable:
+---
+
+## Registry Storage Architecture
+
+### Directory Structure
+
+The registry organizes data in a content-addressable way:
 
 ```
 /share/Container/registry-data/
@@ -36,77 +38,77 @@ Il registry organizza i dati in modo content-addressable:
             │   └── sha256/
             │       ├── 00/
             │       │   └── 00a123.../
-            │       │       └── data        ← Layer binario
+            │       │       └── data        ← Binary layer
             │       ├── 01/
             │       └── ff/
             └── repositories/
-                └── <nome-immagine>/
+                └── <image-name>/
                     ├── _layers/
                     │   └── sha256/
                     │       └── <digest>/
-                    │           └── link     ← Puntatore a blob
+                    │           └── link     ← Pointer to blob
                     ├── _manifests/
                     │   ├── revisions/
                     │   └── tags/
                     │       └── <tag>/
                     │           └── current/
-                    │               └── link ← Tag corrente
-                    └── _uploads/            ← Upload temporanei
+                    │               └── link ← Current tag
+                    └── _uploads/            ← Temporary uploads
 ```
 
-### Componenti
+### Components
 
-| Directory | Contenuto | Caratteristica |
-|-----------|-----------|----------------|
-| `blobs/sha256/` | Layer binari | Content-addressable, deduplicati |
-| `repositories/` | Metadati | Link ai blob |
-| `_manifests/tags/` | Mapping tag → digest | Risoluzione tag |
-| `_uploads/` | Upload in corso | Temporaneo |
+| Directory | Content | Feature |
+|-----------|---------|---------|
+| `blobs/sha256/` | Binary layers | Content-addressable, deduplicated |
+| `repositories/` | Metadata | Links to blobs |
+| `_manifests/tags/` | Tag → digest mapping | Tag resolution |
+| `_uploads/` | Uploads in progress | Temporary |
 
-### Vantaggi per Snapshot QNAP
+### Benefits for QNAP Snapshots
 
-1. **Deduplicazione naturale**: Layer condivisi tra immagini esistono una sola volta
-2. **Snapshot incrementali efficienti**: Solo i nuovi blob vengono catturati
-3. **Consistenza garantita**: I blob sono immutabili (write-once)
+1. **Natural deduplication**: Shared layers between images exist only once
+2. **Efficient incremental snapshots**: Only new blobs are captured
+3. **Guaranteed consistency**: Blobs are immutable (write-once)
 
-### Separazione Container / Dati
+### Container / Data Separation
 
-| Dentro il container (effimero) | Fuori dal container (persistente) |
-|--------------------------------|-----------------------------------|
-| Binario `/bin/registry` | Blob immagini |
-| Config default | Repository metadata |
-| Cache in-memory | Tag e manifest |
+| Inside container (ephemeral) | Outside container (persistent) |
+|------------------------------|--------------------------------|
+| Binary `/bin/registry` | Image blobs |
+| Default config | Repository metadata |
+| In-memory cache | Tags and manifests |
 
-**Aggiornamento container**: I dati nel volume montato rimangono intatti. Il nuovo container legge gli stessi dati.
+**Container update**: Data in the mounted volume remains intact. The new container reads the same data.
 
 ---
 
-## Procedura di Installazione
+## Installation Procedure
 
-### 1. Connessione SSH al NAS
+### 1. SSH Connection to NAS
 
 ```bash
-ssh admin@<IP_NAS>
+ssh admin@<NAS_IP>
 ```
 
-### 2. Creazione Directory per i Dati
+### 2. Create Data Directory
 
 ```bash
 mkdir -p /share/Container/registry-data
 ```
 
-### 3. Rimozione Container Esistente (se presente)
+### 3. Remove Existing Container (if present)
 
 ```bash
 docker stop registry
 docker rm registry
 ```
 
-### 4. Creazione Container Registry v3
+### 4. Create Registry v3 Container
 
-#### Configurazione Base
+#### Basic Configuration
 
-Configurazione minima per test e sviluppo:
+Minimal configuration for testing and development:
 
 ```bash
 docker run -d \
@@ -119,15 +121,15 @@ docker run -d \
   registry:3
 ```
 
-#### Configurazione Intermedia (Consigliata)
+#### Intermediate Configuration (Recommended)
 
-Con chiave segreta persistente, limiti risorse e gestione log:
+With persistent secret key, resource limits, and log management:
 
 ```bash
-# 1. Genera chiave segreta persistente
+# 1. Generate persistent secret key
 openssl rand -hex 32 > /share/Container/registry-secret.txt
 
-# 2. Avvia container
+# 2. Start container
 docker run -d \
   --name registry \
   --restart=always \
@@ -146,22 +148,22 @@ docker run -d \
   registry:3
 ```
 
-#### Configurazione Produzione (con Redis)
+#### Production Configuration (with Redis)
 
-Per ambienti con alto traffico e molti pull concorrenti:
+For high-traffic environments with many concurrent pulls:
 
 ```bash
-# 1. Genera chiave segreta persistente
+# 1. Generate persistent secret key
 openssl rand -hex 32 > /share/Container/registry-secret.txt
 
-# 2. Avvia Redis per cache
+# 2. Start Redis for caching
 docker run -d \
   --name registry-redis \
   --restart=always \
   --memory=256m \
   redis:alpine
 
-# 3. Avvia Registry con cache Redis
+# 3. Start Registry with Redis cache
 docker run -d \
   --name registry \
   --restart=always \
@@ -183,59 +185,59 @@ docker run -d \
   registry:3
 ```
 
-### Confronto Configurazioni
+### Configuration Comparison
 
-| Parametro | Base | Intermedia | Produzione |
-|-----------|------|------------|------------|
-| Limiti risorse | No | Sì | Sì |
-| Chiave persistente | No | Sì | Sì |
-| Gestione log | No | Sì | Sì |
-| Cancellazione immagini | No | Sì | Sì |
-| Cache Redis | No | No | Sì |
-| Uso consigliato | Test | Uso normale | Alto traffico |
+| Parameter | Basic | Intermediate | Production |
+|-----------|-------|--------------|------------|
+| Resource limits | No | Yes | Yes |
+| Persistent key | No | Yes | Yes |
+| Log management | No | Yes | Yes |
+| Image deletion | No | Yes | Yes |
+| Redis cache | No | No | Yes |
+| Recommended use | Testing | Normal use | High traffic |
 
-### 5. Verifica Installazione
+### 5. Installation Verification
 
 ```bash
-# Container in esecuzione
+# Running container
 docker ps | grep registry
 
 # Port mapping
 docker port registry
 # Output: 5000/tcp -> 0.0.0.0:5000
 
-# Log puliti
+# Clean logs
 docker logs registry
 # Output: level=info msg="listening on 0.0.0.0:5000"
 ```
 
-### 6. Test Funzionamento
+### 6. Functionality Test
 
 ```bash
-# Test locale
+# Local test
 curl http://localhost:5000/v2/
 
-# Test remoto
-curl http://<IP_NAS>:5000/v2/
+# Remote test
+curl http://<NAS_IP>:5000/v2/
 
-# Risposta attesa: {}
+# Expected response: {}
 ```
 
 ---
 
-## Configurazione Client Docker
+## Docker Client Configuration
 
 ### Linux
 
-Modificare `/etc/docker/daemon.json`:
+Edit `/etc/docker/daemon.json`:
 
 ```json
 {
-  "insecure-registries": ["<IP_NAS>:5000"]
+  "insecure-registries": ["<NAS_IP>:5000"]
 }
 ```
 
-Riavviare Docker:
+Restart Docker:
 
 ```bash
 sudo systemctl restart docker
@@ -243,11 +245,11 @@ sudo systemctl restart docker
 
 ### macOS / Windows (Docker Desktop)
 
-Docker Desktop → Settings → Docker Engine → aggiungere:
+Docker Desktop → Settings → Docker Engine → add:
 
 ```json
 {
-  "insecure-registries": ["<IP_NAS>:5000"]
+  "insecure-registries": ["<NAS_IP>:5000"]
 }
 ```
 
@@ -255,160 +257,160 @@ Apply & Restart.
 
 ---
 
-## Utilizzo del Registry
+## Registry Usage
 
-### Push immagine
+### Push image
 
 ```bash
-docker tag alpine:latest <IP_NAS>:5000/alpine:latest
-docker push <IP_NAS>:5000/alpine:latest
+docker tag alpine:latest <NAS_IP>:5000/alpine:latest
+docker push <NAS_IP>:5000/alpine:latest
 ```
 
-### Pull immagine
+### Pull image
 
 ```bash
-docker pull <IP_NAS>:5000/alpine:latest
+docker pull <NAS_IP>:5000/alpine:latest
 ```
 
-### Elenco immagini
+### List images
 
 ```bash
-curl http://<IP_NAS>:5000/v2/_catalog
+curl http://<NAS_IP>:5000/v2/_catalog
 ```
 
-### Elenco tag
+### List tags
 
 ```bash
-curl http://<IP_NAS>:5000/v2/<nome-immagine>/tags/list
+curl http://<NAS_IP>:5000/v2/<image-name>/tags/list
 ```
 
 ---
 
-## Backup con Snapshot QNAP
+## Backup with QNAP Snapshots
 
-### Strategia Consigliata
+### Recommended Strategy
 
-1. **Snapshot schedulata** su `/share/Container/` ogni 4-6 ore
-2. **Replica snapshot** verso secondo NAS o cloud
-3. **Retention**: mantieni N snapshot per point-in-time recovery
+1. **Scheduled snapshots** on `/share/Container/` every 4-6 hours
+2. **Snapshot replication** to a second NAS or cloud
+3. **Retention**: keep N snapshots for point-in-time recovery
 
-### Consistenza Snapshot
+### Snapshot Consistency
 
-I blob sono immutabili, quindi le snapshot sono sempre consistenti. Per snapshot critiche su registry ad alto traffico:
+Blobs are immutable, so snapshots are always consistent. For critical snapshots on high-traffic registries:
 
 ```bash
-# Pausa temporanea (opzionale)
+# Temporary pause (optional)
 docker pause registry
-# → Esegui snapshot QNAP
+# → Execute QNAP snapshot
 docker unpause registry
 ```
 
-### Cosa Includere nel Backup
+### What to Include in Backup
 
-| Path | Contenuto | Priorità |
-|------|-----------|----------|
-| `/share/Container/registry-data/` | Immagini e metadati | **Critico** |
-| `/share/Container/registry-secret.txt` | Chiave segreta | **Critico** |
+| Path | Content | Priority |
+|------|---------|----------|
+| `/share/Container/registry-data/` | Images and metadata | **Critical** |
+| `/share/Container/registry-secret.txt` | Secret key | **Critical** |
 
 ### Restore
 
 ```bash
-# 1. Ripristina snapshot QNAP
-# 2. Ricrea container con stesso comando (sezione 4)
-# 3. Verifica: curl http://localhost:5000/v2/_catalog
+# 1. Restore QNAP snapshot
+# 2. Recreate container with same command (section 4)
+# 3. Verify: curl http://localhost:5000/v2/_catalog
 ```
 
 ---
 
-## Ottimizzazioni QNAP
+## QNAP Optimizations
 
 ### Storage
 
-- Usa **SSD/NVMe** per `/share/Container/`
-- Abilita **SSD Cache** in Storage & Snapshots
-- Sposta **Docker Root su SSD** in Container Station → Preferences
+- Use **SSD/NVMe** for `/share/Container/`
+- Enable **SSD Cache** in Storage & Snapshots
+- Move **Docker Root to SSD** in Container Station → Preferences
 
-### Rete
+### Network
 
-- **Jumbo Frame 9000** se supportato dalla rete
-- **Host Network Mode** (`--network=host`) per eliminare overhead NAT
+- **Jumbo Frames 9000** if supported by the network
+- **Host Network Mode** (`--network=host`) to eliminate NAT overhead
 
-### Sistema
+### System
 
-- Disabilita **servizi QTS non necessari**
-- Escludi `/share/Container/` dall'**antivirus**
-- Espandi **RAM a 8GB+** per uso intensivo
+- Disable **unnecessary QTS services**
+- Exclude `/share/Container/` from **antivirus**
+- Expand **RAM to 8GB+** for intensive use
 
-### Verifica Storage Driver
+### Verify Storage Driver
 
 ```bash
 docker info | grep "Storage Driver"
-# Ottimale: overlay2
+# Optimal: overlay2
 ```
 
 ---
 
-## Manutenzione
+## Maintenance
 
 ### Garbage Collection
 
-Recupera spazio eliminando layer orfani:
+Reclaim space by removing orphaned layers:
 
 ```bash
-# Dry-run (verifica)
+# Dry-run (verification)
 docker exec registry bin/registry garbage-collect \
   --dry-run /etc/distribution/config.yml
 
-# Esecuzione
+# Execution
 docker exec registry bin/registry garbage-collect \
   /etc/distribution/config.yml
 ```
 
-### Cancellazione Immagine
+### Image Deletion
 
 ```bash
-# Ottieni digest
+# Get digest
 DIGEST=$(curl -s -I -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-  http://<IP_NAS>:5000/v2/<immagine>/manifests/<tag> | \
+  http://<NAS_IP>:5000/v2/<image>/manifests/<tag> | \
   grep -i docker-content-digest | awk '{print $2}' | tr -d '\r')
 
-# Cancella
-curl -X DELETE http://<IP_NAS>:5000/v2/<immagine>/manifests/$DIGEST
+# Delete
+curl -X DELETE http://<NAS_IP>:5000/v2/<image>/manifests/$DIGEST
 
 # Garbage collection
 docker exec registry bin/registry garbage-collect /etc/distribution/config.yml
 ```
 
-### Aggiornamento Registry
+### Registry Update
 
 ```bash
 docker pull registry:3
 docker stop registry
 docker rm registry
-# Esegui nuovamente il comando docker run della configurazione scelta
+# Execute the docker run command again for your chosen configuration
 ```
 
 ---
 
 ## Troubleshooting
 
-### Porta non raggiungibile
+### Port unreachable
 
-1. Verifica firewall: Control Panel → Security
-2. Aggiungi `10.0.0.0/8` alle reti consentite
+1. Check firewall: Control Panel → Security
+2. Add `10.0.0.0/8` to allowed networks
 
-### Errore HTTPS
+### HTTPS error
 
-Configura `insecure-registries` sul client (sezione Configurazione Client).
+Configure `insecure-registries` on the client (see Client Configuration section).
 
-### Verifica rete
+### Network verification
 
 ```bash
 netstat -tlnp | grep 5000
 # Output: tcp 0 0 0.0.0.0:5000 ... docker-proxy
 ```
 
-### Monitoraggio risorse
+### Resource monitoring
 
 ```bash
 docker stats registry
@@ -416,7 +418,7 @@ docker stats registry
 
 ---
 
-## Riferimenti
+## References
 
 - [CNCF Distribution Documentation](https://distribution.github.io/distribution/)
 - [Docker Registry API v2](https://docs.docker.com/registry/spec/api/)
